@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#0b1020" />
+  <title>Blob Arena — Agar.io style</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;800;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: rgba(10, 16, 32, 0.82);
+      --accent: #6ee7ff;
+      --pink: #ff6bcb;
+      --good: #7cffb2;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      font-family: Nunito, system-ui, sans-serif;
+      color: #e8f0ff;
+      touch-action: none;
+      user-select: none;
+    }
+    canvas { display: block; width: 100%; height: 100%; }
+    #hud {
+      position: fixed; inset: 0; pointer-events: none;
+      display: flex; flex-direction: column;
+    }
+    #topbar {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      padding: 12px 14px; gap: 10px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 8px 12px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.35);
+    }
+    #scorebox { min-width: 140px; }
+    #scorebox .label { font-size: 11px; letter-spacing: .12em; opacity: .55; text-transform: uppercase; }
+    #scorebox .val { font-size: 22px; font-weight: 900; color: var(--accent); line-height: 1.1; }
+    #scorebox .sub { font-size: 12px; opacity: .7; }
+    #leaderboard {
+      min-width: 168px;
+      pointer-events: auto;
+      overflow: hidden;
+      transition: transform .28s ease, opacity .28s ease, max-height .28s ease, padding .28s ease;
+      max-height: 280px;
+    }
+    #leaderboard.closed {
+      transform: translateY(-110%);
+      opacity: 0;
+      max-height: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      pointer-events: none;
+    }
+    #leaderboard h3 { font-size: 11px; letter-spacing: .14em; opacity: .55; text-transform: uppercase; margin-bottom: 6px; }
+    #leaderboard ol { list-style: none; font-size: 13px; }
+    #leaderboard li { display: flex; justify-content: space-between; gap: 10px; padding: 1px 0; }
+    #leaderboard li.me { color: var(--good); font-weight: 800; }
+    #lbToggle {
+      pointer-events: auto;
+      position: absolute;
+      top: 12px;
+      right: 14px;
+      width: 36px;
+      height: 22px;
+      border: 1px solid rgba(255,255,255,.16);
+      background: rgba(10,16,32,.72);
+      color: rgba(255,255,255,.8);
+      border-radius: 0 0 10px 10px;
+      font: 800 11px Nunito, sans-serif;
+      z-index: 7;
+    }
+    #topbar { position: relative; }
+    #joyWrap {
+      position: absolute;
+      left: max(10px, env(safe-area-inset-left));
+      bottom: max(18px, env(safe-area-inset-bottom));
+      width: 168px; height: 168px;
+      pointer-events: auto;
+      touch-action: none;
+      z-index: 6;
+    }
+    #joyBase {
+      position: absolute; inset: 18px;
+      border-radius: 50%;
+      background: rgba(255,255,255,.06);
+      border: 2px solid rgba(255,255,255,.16);
+      box-shadow: inset 0 0 24px rgba(0,0,0,.25);
+    }
+    #joyKnob {
+      position: absolute; left: 50%; top: 50%;
+      width: 58px; height: 58px;
+      margin: -29px 0 0 -29px;
+      border-radius: 50%;
+      background: rgba(126, 232, 255, .28);
+      border: 2px solid rgba(255,255,255,.38);
+      box-shadow: 0 4px 16px rgba(0,0,0,.28);
+      pointer-events: none;
+    }
+    #actions {
+      position: absolute;
+      right: max(12px, env(safe-area-inset-right));
+      bottom: max(22px, env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      pointer-events: auto;
+      z-index: 6;
+    }
+    .act {
+      width: 78px; height: 78px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,.22);
+      background: rgba(12, 18, 36, .28);
+      color: rgba(255,255,255,.82);
+      font: 800 12px Nunito, system-ui, sans-serif;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      box-shadow: 0 8px 22px rgba(0,0,0,.22);
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .act:active, .act.pressed {
+      background: rgba(126, 232, 255, .22);
+      border-color: rgba(126, 232, 255, .55);
+      transform: scale(0.96);
+    }
+    #splitBtn { width: 88px; height: 88px; font-size: 13px; }
+    #menu {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background:
+        radial-gradient(900px 500px at 20% 20%, rgba(110,231,255,.18), transparent 50%),
+        radial-gradient(800px 500px at 80% 80%, rgba(255,107,203,.16), transparent 50%),
+        #0b1020;
+      z-index: 20;
+    }
+    #menu.hidden { display: none; }
+    .card {
+      width: min(420px, calc(100vw - 28px));
+      background: rgba(12,18,36,.78);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 22px;
+      padding: 28px 24px 22px;
+      backdrop-filter: blur(16px);
+      box-shadow: 0 30px 80px rgba(0,0,0,.45);
+      text-align: center;
+    }
+    .logo {
+      font-size: 38px; font-weight: 900; letter-spacing: -0.04em;
+      background: linear-gradient(90deg, #7cffb2, #6ee7ff, #ff6bcb);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .tag { margin-top: 4px; opacity: .7; font-size: 14px; }
+    #nameInput {
+      margin-top: 22px; width: 100%;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: white; font: 800 16px Nunito, sans-serif;
+      padding: 12px 14px; border-radius: 12px; outline: none;
+      text-align: center;
+    }
+    .row { display: flex; gap: 8px; margin-top: 12px; }
+    .play {
+      flex: 1; border: 0; border-radius: 14px; padding: 14px;
+      font: 900 16px Nunito, sans-serif; cursor: pointer; color: #061018;
+      background: linear-gradient(180deg, #7cffb2, #2ee08a);
+      box-shadow: 0 6px 0 #178a55;
+    }
+    .play:active { transform: translateY(3px); box-shadow: 0 3px 0 #178a55; }
+    .hint { margin-top: 16px; font-size: 12px; opacity: .62; line-height: 1.45; text-align: left; }
+    #dead {
+      position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+      background: rgba(4,8,16,.62); z-index: 15;
+    }
+    #dead.show { display: flex; }
+    #dead .card { width: min(360px, calc(100vw - 28px)); }
+    kbd {
+      display: inline-block; padding: 1px 6px; border-radius: 6px;
+      background: rgba(255,255,255,.1); font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="hud">
+    <div id="topbar">
+      <div class="panel" id="scorebox">
+        <div class="label">Score</div>
+        <div class="val" id="scoreVal">0</div>
+        <div class="sub" id="massVal">Mass 10</div>
+        <div class="sub" id="mergeVal"></div>
+      </div>
+      <div class="panel" id="leaderboard">
+        <h3>Names</h3>
+        <ol id="lbList"></ol>
+      </div>
+    </div>
+    <button type="button" id="lbToggle" aria-label="Toggle names">▲</button>
+    <div id="joyWrap">
+      <div id="joyBase"></div>
+      <div id="joyKnob"></div>
+    </div>
+    <div id="actions">
+      <button type="button" class="act" id="feedBtn">FEED</button>
+      <button type="button" class="act" id="splitBtn">SPLIT</button>
+    </div>
+  </div>
+
+  <div id="menu">
+    <div class="card">
+      <div class="logo">BLOB ARENA</div>
+      <div class="tag">Eat. Grow. Dominate. Agar.io-style.</div>
+      <input id="nameInput" maxlength="16" placeholder="Your name" autocomplete="off" enterkeyhint="go" autocapitalize="off" />
+      <div class="row">
+        <button type="button" class="play" id="playBtn">PLAY VS BOTS</button>
+      </div>
+      <div class="hint">
+        Left stick steers. Right buttons split / feed — use a second finger, keep steering.<br>
+        Split and feed always shoot the way you are facing.<br>
+        Desktop: mouse aim, <kbd>Space</kbd> split, <kbd>W</kbd> feed.<br>
+        <b>Play this file in Safari or Chrome — not inside Grok.</b> The in-chat preview will kick you out once the map gets heavy.
+      </div>
+    </div>
+  </div>
+
+  <div id="dead">
+    <div class="card">
+      <div class="logo" style="font-size:28px">Eaten</div>
+      <div class="tag" id="deadMsg">A larger cell absorbed you.</div>
+      <div class="row"><button class="play" id="againBtn">PLAY AGAIN</button></div>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const WORLD = 7200;
+    const FOOD_COUNT = 820;
+    const BOT_COUNT = 36;
+    const VIRUS_COUNT = 18;
+    const MIN_MASS = 10;
+    const SPLIT_MIN = 35;
+    const EJECT_COST = 18;
+    const EJECT_GAIN = 14;
+    const EJECT_MIN = 35;
+    const EAT_ONE = 1.11;
+    const EAT_SPLIT = 1.28;
+    const VIRUS_POP_MASS = 130;
+    const VIRUS_FEEDS = 7;
+    const MAX_CELLS = 16;
+    const MAX_CELL_MASS = 22500;
+    const SPLIT_BOOST = 38;
+    const GHOST_MS = 900;
+    const COLORS = [
+      '#ff5d73', '#ff8a5b', '#ffd166', '#7cffb2', '#4ad0ff',
+      '#6ee7ff', '#8b7cff', '#ff6bcb', '#c3f584', '#70e0c0'
+    ];
+
+    let W = innerWidth, H = innerHeight;
+    let dpr = Math.min(devicePixelRatio || 1, 2);
+    function resize() {
+      W = innerWidth; H = innerHeight;
+      dpr = Math.min(devicePixelRatio || 1, window.matchMedia('(pointer: coarse)').matches ? 1.25 : 1.75);
+      canvas.width = W * dpr; canvas.height = H * dpr;
+      canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    addEventListener('resize', resize); resize();
+
+    const rand = (a, b) => a + Math.random() * (b - a);
+    const pick = a => a[Math.floor(Math.random() * a.length)];
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const massToR = m => 4 + Math.sqrt(Math.max(0, Math.min(m, MAX_CELL_MASS))) * 6;
+    const speedOf = m => 3.15 * Math.pow(MIN_MASS / Math.max(m, MIN_MASS), 0.32);
+    function keepInWorld(o, rad) {
+      const r = rad == null ? (o.r || 6) : rad;
+      if (o.x < r) { o.x = r; if (o.vx) o.vx = Math.abs(o.vx) * 0.35; if (o.bx) o.bx = Math.abs(o.bx) * 0.2; }
+      if (o.x > WORLD - r) { o.x = WORLD - r; if (o.vx) o.vx = -Math.abs(o.vx) * 0.35; if (o.bx) o.bx = -Math.abs(o.bx) * 0.2; }
+      if (o.y < r) { o.y = r; if (o.vy) o.vy = Math.abs(o.vy) * 0.35; if (o.by) o.by = Math.abs(o.by) * 0.2; }
+      if (o.y > WORLD - r) { o.y = WORLD - r; if (o.vy) o.vy = -Math.abs(o.vy) * 0.35; if (o.by) o.by = -Math.abs(o.by) * 0.2; }
+    }
+
+    const BOT_NAMES = [
+      'Wraith','Jelly','Orca','Piranha','Nebula','Comet','Viper','Sable',
+      'Nova','Echo','Haze','Blitz','Koi','Drift','Rogue','Mango',
+      'Cinder','Polar','Glimmer','Titan','Nix','Bolt','Harbor','Reef',
+      'Sundog','Quill','Brine','Maple','Apex','Fathom','Zinc','Ivy',
+      'Scorch','Lumen','Prowler','Nimbus','Grit','Solace','Riptide','Ember',
+      'Cedar','Mirage','Osprey','Dune','Flicker','Knurl','SableFin','Orbit'
+    ];
+
+    let foods = [];
+    let viruses = [];
+    let players = [];
+    let myId = null;
+    let mouse = { x: 0, y: 0 };
+    let cam = { x: WORLD/2, y: WORLD/2, z: 1 };
+    let running = false;
+    let last = performance.now();
+    let face = { x: 1, y: 0 };
+    let stick = { active: false, id: null, x: 0, y: 0, kx: 0, ky: 0 };
+    const JOY_RADIUS = 58;
+
+    function spawnPos() {
+      return { x: rand(200, WORLD - 200), y: rand(200, WORLD - 200) };
+    }
+
+    function makeFood(pos) {
+      const p = pos || spawnPos();
+      const big = Math.random() < 0.08;
+      const mass = big ? rand(3, 8) : 1;
+      return { x: p.x, y: p.y, mass, r: big ? 7.4 : 5.2, color: pick(COLORS) };
+    }
+    function mergeMs(mass) {
+      return (30 + 0.02 * Math.max(mass, MIN_MASS)) * 1000;
+    }
+    function eatNeed(p) {
+      return p.cells.length <= 1 ? EAT_ONE : EAT_SPLIT;
+    }
+    function makeCell(x, y, mass, extra = {}) {
+      const now = performance.now();
+      return {
+        x, y, mass, r: massToR(mass),
+        vx: 0, vy: 0, bx: 0, by: 0,
+        born: now,
+        mergeAt: extra.mergeAt != null ? extra.mergeAt : now,
+        ghostUntil: extra.ghostUntil || 0,
+      };
+    }
+    function makeVirus(pos) {
+      const p = pos || spawnPos();
+      return { x: p.x, y: p.y, mass: 100, r: massToR(100), spikes: 14, feeds: 0 };
+    }
+    function makePlayer(opts = {}) {
+      const p = opts.pos || spawnPos();
+      const mass = opts.mass || MIN_MASS;
+      return {
+        id: opts.id || ('p' + Math.random().toString(36).slice(2) + Date.now().toString(36)),
+        name: opts.name || 'Unnamed',
+        color: opts.color || pick(COLORS),
+        bot: !!opts.bot,
+        cells: [makeCell(p.x, p.y, mass)],
+        score: Math.floor(mass),
+        alive: true,
+        target: { x: p.x, y: p.y },
+        lastEject: 0,
+        ai: {
+          mode: 'farm',
+          t: 0,
+          style: opts.style || pick(['farm', 'hunt', 'mix']),
+          splitCool: 0,
+          fi: Math.floor(Math.random() * 7),
+        },
+      };
+    }
+
+    function totalMass(p) {
+      return p.cells.reduce((s, c) => s + c.mass, 0);
+    }
+    function centroid(p) {
+      let m = 0, x = 0, y = 0;
+      for (const c of p.cells) { x += c.x * c.mass; y += c.y * c.mass; m += c.mass; }
+      if (!m || !isFinite(m)) return { x: WORLD / 2, y: WORLD / 2, m: MIN_MASS };
+      return { x: x / m, y: y / m, m };
+    }
+
+    function resetWorld(name) {
+      foods = Array.from({ length: FOOD_COUNT }, () => makeFood());
+      viruses = Array.from({ length: VIRUS_COUNT }, () => makeVirus());
+      players = [];
+      const me = makePlayer({ name, color: '#7cffb2', pos: { x: WORLD/2, y: WORLD/2 } });
+      myId = me.id;
+      players.push(me);
+      const used = new Set([name]);
+      for (let i = 0; i < BOT_COUNT; i++) {
+        let n = pick(BOT_NAMES);
+        while (used.has(n)) n = pick(BOT_NAMES) + Math.floor(rand(2, 99));
+        used.add(n);
+        const roll = Math.random();
+        const mass = roll < 0.45 ? rand(12, 28) : roll < 0.75 ? rand(35, 90) : roll < 0.93 ? rand(110, 220) : rand(280, 520);
+        const style = mass > 200 ? 'hunt' : mass > 80 ? pick(['hunt', 'mix']) : pick(['farm', 'mix', 'farm']);
+        players.push(makePlayer({
+          name: n, bot: true, mass, style, pos: spawnPos(),
+        }));
+      }
+      running = true;
+      document.getElementById('menu').classList.add('hidden');
+      document.getElementById('dead').classList.remove('show');
+    }
+
+    function facingAngle() {
+      const len = Math.hypot(face.x, face.y);
+      if (len < 0.001) return 0;
+      return Math.atan2(face.y, face.x);
+    }
+    function facingAngleFor(p) {
+      if (p.id === myId) return facingAngle();
+      const c = centroid(p);
+      return Math.atan2(p.target.y - c.y, p.target.x - c.x);
+    }
+
+    function splitPlayer(p) {
+      if (p.cells.length >= MAX_CELLS) return;
+      const now = performance.now();
+      const ang = facingAngleFor(p);
+      const order = p.cells.slice().sort((a, b) => b.mass - a.mass);
+      for (const c of order) {
+        if (p.cells.length >= MAX_CELLS) break;
+        if (c.mass < SPLIT_MIN) continue;
+        const half = c.mass / 2;
+        c.mass = half;
+        c.r = massToR(half);
+        c.mergeAt = now + mergeMs(half);
+        c.ghostUntil = now + GHOST_MS;
+        const child = makeCell(
+          c.x + Math.cos(ang) * 8,
+          c.y + Math.sin(ang) * 8,
+          half,
+          { mergeAt: now + mergeMs(half), ghostUntil: now + GHOST_MS }
+        );
+        child.bx = Math.cos(ang) * SPLIT_BOOST;
+        child.by = Math.sin(ang) * SPLIT_BOOST;
+        p.cells.push(child);
+      }
+      if (p.cells.length > MAX_CELLS) p.cells.length = MAX_CELLS;
+    }
+
+    function eject(p) {
+      const now = performance.now();
+      if (now - p.lastEject < 140) return;
+      p.lastEject = now;
+      const ang = facingAngleFor(p);
+      for (const c of p.cells) {
+        if (c.mass < EJECT_MIN) continue;
+        c.mass = Math.max(MIN_MASS, c.mass - EJECT_COST);
+        c.r = massToR(c.mass);
+        const d = c.r + 22;
+        const pellet = {
+          x: clamp(c.x + Math.cos(ang) * d, 8, WORLD - 8),
+          y: clamp(c.y + Math.sin(ang) * d, 8, WORLD - 8),
+          mass: EJECT_GAIN, r: 8, color: p.color,
+          vx: Math.cos(ang) * 18,
+          vy: Math.sin(ang) * 18,
+          flying: true,
+          pellet: true,
+        };
+        keepInWorld(pellet, 8);
+        const flying = foods.reduce((n, f) => n + (f.pellet ? 1 : 0), 0);
+        if (flying < 80) foods.push(pellet);
+      }
+    }
+
+    function popSplit(p, cell) {
+      const now = performance.now();
+      const slots = MAX_CELLS - (p.cells.length - 1);
+      if (slots <= 1) return;
+      const pieces = Math.min(8, slots);
+      const each = cell.mass / pieces;
+      const idx = p.cells.indexOf(cell);
+      if (idx >= 0) p.cells.splice(idx, 1);
+      for (let i = 0; i < pieces && p.cells.length < MAX_CELLS; i++) {
+        const a = (Math.PI * 2 * i) / pieces + rand(-0.15, 0.15);
+        const bit = makeCell(
+          cell.x + Math.cos(a) * 10,
+          cell.y + Math.sin(a) * 10,
+          each,
+          { mergeAt: now + mergeMs(each), ghostUntil: now + GHOST_MS }
+        );
+        bit.bx = Math.cos(a) * 24;
+        bit.by = Math.sin(a) * 24;
+        p.cells.push(bit);
+      }
+      if (p.cells.length > MAX_CELLS) p.cells.length = MAX_CELLS;
+    }
+
+    function botThink(p, dt) {
+      p.ai.t -= dt;
+      p.ai.splitCool = Math.max(0, (p.ai.splitCool || 0) - dt);
+      const c = centroid(p);
+      const myM = c.m;
+      const biggest = p.cells.reduce((a, b) => a.mass >= b.mass ? a : b);
+      const need = eatNeed(p);
+      const style = p.ai.style || 'mix';
+      const huntRange = style === 'farm' ? 700 : 1600;
+      const fleePad = style === 'hunt' ? 0.85 : 1.15;
+
+      let threat = null, threatD = 1e9;
+      let prey = null, preyScore = -1e9;
+      for (const o of players) {
+        if (o === p || !o.alive) continue;
+        for (const oc of o.cells) {
+          const d = Math.hypot(oc.x - c.x, oc.y - c.y);
+          if (d > 1800) continue;
+          if (oc.mass > biggest.mass * need && d < threatD) {
+            threat = oc; threatD = d;
+          }
+          if (biggest.mass > oc.mass * need && d < huntRange) {
+            const s = oc.mass / (d + 50) * (o.cells.length > 1 ? 1.35 : 1);
+            if (s > preyScore) { prey = oc; preyScore = s; }
+          }
+        }
+      }
+
+      let nearFood = null, fd = 1e9;
+      const step = 5;
+      for (let i = p.ai.fi % step; i < foods.length; i += step) {
+        const f = foods[i];
+        const dx = f.x - c.x, dy = f.y - c.y;
+        if (Math.abs(dx) > 900 || Math.abs(dy) > 900) continue;
+        const d = Math.hypot(dx, dy);
+        const s = d / f.mass;
+        if (s < fd) { fd = s; nearFood = f; }
+      }
+      p.ai.fi = (p.ai.fi + 1) % step;
+
+      let virusThreat = null, vd = 1e9;
+      if (biggest.mass < VIRUS_POP_MASS) {
+        for (const v of viruses) {
+          const d = Math.hypot(v.x - c.x, v.y - c.y);
+          if (d < 220 && d < vd) { virusThreat = v; vd = d; }
+        }
+      }
+
+      const dangerClose = threat && threatD < (380 + Math.sqrt(threat.mass) * 9) * fleePad;
+
+      if (dangerClose) {
+        const dx = c.x - threat.x, dy = c.y - threat.y;
+        p.target.x = c.x + dx;
+        p.target.y = c.y + dy;
+        p.ai.mode = 'flee';
+        if (style !== 'farm' && p.cells.length === 1 && myM > 80 && threatD < 220 && p.ai.splitCool <= 0) {
+          splitPlayer(p);
+          p.ai.splitCool = 4;
+        }
+      } else if (virusThreat) {
+        p.target.x = c.x - (virusThreat.x - c.x);
+        p.target.y = c.y - (virusThreat.y - c.y);
+        p.ai.mode = 'avoid';
+      } else if (prey && (style !== 'farm' || preyScore > 0.12)) {
+        p.target.x = prey.x;
+        p.target.y = prey.y;
+        p.ai.mode = 'hunt';
+        const dPrey = Math.hypot(prey.x - biggest.x, prey.y - biggest.y);
+        const halfBeats = (biggest.mass / 2) > prey.mass * need;
+        if (
+          p.ai.splitCool <= 0 &&
+          p.cells.length < 8 &&
+          biggest.mass >= SPLIT_MIN &&
+          halfBeats &&
+          dPrey < 780 &&
+          dPrey > biggest.r * 0.8
+        ) {
+          const faceSave = { x: face.x, y: face.y };
+          p.target.x = prey.x; p.target.y = prey.y;
+          splitPlayer(p);
+          if (p.id === myId) { face.x = faceSave.x; face.y = faceSave.y; }
+          p.ai.splitCool = 3.2;
+        }
+      } else if (nearFood) {
+        p.target.x = nearFood.x;
+        p.target.y = nearFood.y;
+        p.ai.mode = 'farm';
+      } else if (p.ai.t <= 0) {
+        p.target.x = clamp(c.x + rand(-900, 900), 120, WORLD - 120);
+        p.target.y = clamp(c.y + rand(-900, 900), 120, WORLD - 120);
+        p.ai.t = rand(1.2, 3.2);
+        p.ai.mode = 'wander';
+      }
+    }
+
+    function moveCells(p, dt) {
+      const now = performance.now();
+      for (const c of p.cells) {
+        const ang = Math.atan2(p.target.y - c.y, p.target.x - c.x);
+        const spd = speedOf(c.mass);
+        const reach = Math.hypot(p.target.x - c.x, p.target.y - c.y);
+        const scale = Math.min(1, reach / 80);
+        c.vx += Math.cos(ang) * spd * 18 * dt * scale;
+        c.vy += Math.sin(ang) * spd * 18 * dt * scale;
+        c.vx *= Math.pow(0.86, dt * 60);
+        c.vy *= Math.pow(0.86, dt * 60);
+        if (!isFinite(c.mass) || c.mass < MIN_MASS * 0.5) c.mass = MIN_MASS;
+        if (!isFinite(c.x) || !isFinite(c.y)) { c.x = WORLD / 2; c.y = WORLD / 2; }
+        c.x += (c.vx + c.bx) * 60 * dt;
+        c.y += (c.vy + c.by) * 60 * dt;
+        c.bx *= Math.pow(0.955, dt * 60);
+        c.by *= Math.pow(0.955, dt * 60);
+        if (Math.hypot(c.bx, c.by) < 0.15) { c.bx = 0; c.by = 0; }
+        c.mass = Math.max(MIN_MASS * 0.85, Math.min(MAX_CELL_MASS, c.mass * Math.pow(1 - 0.002, dt)));
+        c.r = massToR(c.mass);
+        keepInWorld(c, c.r);
+      }
+      if (p.cells.length < MAX_CELLS) {
+        const fat = p.cells.find(c => c.mass >= MAX_CELL_MASS - 1);
+        if (fat) {
+          const savedFace = { x: face.x, y: face.y };
+          face.x = rand(-1, 1); face.y = rand(-1, 1);
+          splitPlayer(p);
+          if (p.id === myId) { face.x = savedFace.x; face.y = savedFace.y; }
+        }
+      }
+      if (p.cells.length > MAX_CELLS) p.cells.length = MAX_CELLS;
+      for (let i = 0; i < p.cells.length; i++) {
+        for (let j = i + 1; j < p.cells.length; j++) {
+          const a = p.cells[i], b = p.cells[j];
+          const dx = b.x - a.x, dy = b.y - a.y;
+          const d = Math.hypot(dx, dy) || 0.001;
+          const min = a.r + b.r;
+          const ready = now >= a.mergeAt && now >= b.mergeAt;
+          const ghost = now < a.ghostUntil || now < b.ghostUntil;
+          const nx = dx / d, ny = dy / d;
+          if (ready && d < min) {
+            let inward = 0;
+            if (p.id === myId && stick.active) {
+              const midX = (a.x + b.x) / 2, midY = (a.y + b.y) / 2;
+              const toMidX = midX - (a.x + b.x) / 2;
+              const ax = midX - a.x, ay = midY - a.y;
+              const al = Math.hypot(ax, ay) || 1;
+              inward = (face.x * ax + face.y * ay) / al;
+            }
+            const sink = (p.id === myId && !stick.active ? 22 : 16) + Math.max(0, inward) * 38;
+            const step = sink * dt;
+            a.x += nx * step;
+            a.y += ny * step;
+            b.x -= nx * step;
+            b.y -= ny * step;
+            const nd = Math.hypot(b.x - a.x, b.y - a.y);
+            if (nd < Math.max(a.r, b.r) * 0.38) {
+              const tot = a.mass + b.mass;
+              a.x = (a.x * a.mass + b.x * b.mass) / tot;
+              a.y = (a.y * a.mass + b.y * b.mass) / tot;
+              a.mass = tot;
+              a.r = massToR(a.mass);
+              a.mergeAt = now;
+              a.bx = a.by = 0;
+              p.cells.splice(j, 1); j--;
+            }
+            continue;
+          }
+          if (!ghost && !ready && d < min) {
+            const push = (min - d) * 0.12;
+            a.x -= nx * push; a.y -= ny * push;
+            b.x += nx * push; b.y += ny * push;
+          }
+        }
+      }
+    }
+
+    function eatPass() {
+      for (const f of foods) {
+        if (!f.flying) continue;
+        f.x += f.vx; f.y += f.vy;
+        f.vx *= 0.92; f.vy *= 0.92;
+        keepInWorld(f, f.r || 6);
+        if (Math.hypot(f.vx || 0, f.vy || 0) < 0.35) { f.flying = false; f.vx = 0; f.vy = 0; }
+      }
+      if (foods.length > FOOD_COUNT + 80) {
+        for (let i = foods.length - 1; i >= 0 && foods.length > FOOD_COUNT + 40; i--) {
+          if (foods[i].pellet) foods.splice(i, 1);
+        }
+      }
+
+      for (let i = foods.length - 1; i >= 0; i--) {
+        const f = foods[i];
+        if (!f.pellet) continue;
+        for (const v of viruses) {
+          if (Math.hypot(f.x - v.x, f.y - v.y) < v.r + 8) {
+            v.mass += f.mass;
+            v.r = massToR(v.mass);
+            v.feeds = (v.feeds || 0) + 1;
+            const ang = Math.atan2(f.vy, f.vx);
+            foods.splice(i, 1);
+            if (v.feeds >= VIRUS_FEEDS) {
+              v.feeds = 0;
+              v.mass = 100;
+              v.r = massToR(100);
+              const shot = makeVirus({
+                x: v.x + Math.cos(ang) * (v.r + 30),
+                y: v.y + Math.sin(ang) * (v.r + 30),
+              });
+              shot.vx = Math.cos(ang) * 14;
+              shot.vy = Math.sin(ang) * 14;
+              shot.flying = true;
+              if (viruses.length < VIRUS_COUNT + 8) viruses.push(shot);
+            }
+            break;
+          }
+        }
+      }
+
+      for (const v of viruses) {
+        if (!v.flying) continue;
+        v.x += v.vx; v.y += v.vy;
+        v.vx *= 0.94; v.vy *= 0.94;
+        if (Math.hypot(v.vx, v.vy) < 0.3) { v.flying = false; v.vx = 0; v.vy = 0; }
+        v.x = clamp(v.x, v.r, WORLD - v.r);
+        v.y = clamp(v.y, v.r, WORLD - v.r);
+      }
+
+      for (const p of players) {
+        if (!p.alive) continue;
+        for (const c of p.cells) {
+          for (let i = foods.length - 1; i >= 0; i--) {
+            const f = foods[i];
+            if (Math.abs(f.x - c.x) > c.r || Math.abs(f.y - c.y) > c.r) continue;
+            if (Math.hypot(f.x - c.x, f.y - c.y) < c.r - 1) {
+              c.mass += f.mass;
+              c.r = massToR(c.mass);
+              foods.splice(i, 1);
+              if (!f.pellet) foods.push(makeFood());
+            }
+          }
+          for (let i = viruses.length - 1; i >= 0; i--) {
+            const v = viruses[i];
+            const d = Math.hypot(v.x - c.x, v.y - c.y);
+            if (d < c.r - v.r * 0.28 && c.mass >= VIRUS_POP_MASS && c.mass > v.mass) {
+              c.mass += v.mass;
+              c.r = massToR(c.mass);
+              viruses.splice(i, 1);
+              viruses.push(makeVirus());
+              if (p.cells.length < MAX_CELLS) popSplit(p, c);
+              break;
+            }
+          }
+        }
+      }
+
+      for (let i = 0; i < players.length; i++) {
+        const a = players[i];
+        if (!a.alive) continue;
+        const need = eatNeed(a);
+        for (let j = 0; j < players.length; j++) {
+          if (i === j) continue;
+          const b = players[j];
+          if (!b.alive) continue;
+          for (const ac of a.cells) {
+            for (let k = b.cells.length - 1; k >= 0; k--) {
+              const bc = b.cells[k];
+              if (ac.mass < bc.mass * need) continue;
+              const d = Math.hypot(ac.x - bc.x, ac.y - bc.y);
+              if (d < ac.r - bc.r * 0.32) {
+                ac.mass += bc.mass;
+                ac.r = massToR(ac.mass);
+                b.cells.splice(k, 1);
+              }
+            }
+          }
+          if (b.cells.length === 0) {
+            b.alive = false;
+            if (b.id === myId) onDeath(a.name);
+            else if (b.bot) {
+              setTimeout(() => {
+                if (!running) return;
+                const np = makePlayer({ name: b.name, bot: true, color: b.color });
+                const idx = players.indexOf(b);
+                if (idx >= 0) players[idx] = np;
+              }, 1500);
+            }
+          }
+        }
+      }
+    }
+
+    function onDeath(eater) {
+      running = false;
+      document.getElementById('deadMsg').textContent = eater + ' absorbed you.';
+      document.getElementById('dead').classList.add('show');
+    }
+
+    function update(dt) {
+      const me = players.find(p => p.id === myId);
+      if (me && me.alive) {
+        const c = centroid(me);
+        if (stick.active) {
+          const reach = 520 + Math.sqrt(c.m) * 24;
+          me.target.x = c.x + face.x * reach;
+          me.target.y = c.y + face.y * reach;
+        } else if (!window.matchMedia('(pointer: coarse)').matches) {
+          face.x = mouse.x - W / 2;
+          face.y = mouse.y - H / 2;
+          me.target.x = cam.x + face.x / cam.z;
+          me.target.y = cam.y + face.y / cam.z;
+        } else {
+          me.target.x = c.x;
+          me.target.y = c.y;
+        }
+      }
+      for (const p of players) {
+        if (!p.alive) continue;
+        if (p.bot) botThink(p, dt);
+        moveCells(p, dt);
+        p.score = Math.max(p.score, Math.floor(totalMass(p)));
+      }
+      eatPass();
+      if (feeding) {
+        const self = players.find(p => p.id === myId);
+        if (self && self.alive && running) eject(self);
+      }
+
+      if (me && me.alive) {
+        const c = centroid(me);
+        const desiredZ = clamp(1.12 - Math.sqrt(c.m) * 0.018 - (me.cells.length - 1) * 0.035, 0.22, 1.15);
+        cam.z += (desiredZ - cam.z) * 0.06;
+        cam.x += (c.x - cam.x) * 0.18;
+        cam.y += (c.y - cam.y) * 0.18;
+        document.getElementById('scoreVal').textContent = me.score.toLocaleString();
+        document.getElementById('massVal').textContent = 'Mass ' + Math.floor(c.m);
+        const now = performance.now();
+        const wait = me.cells.length < 2 ? 0 : Math.max(0, ...me.cells.map(cell => cell.mergeAt - now));
+        document.getElementById('mergeVal').textContent = wait > 0 ? ('Merge ' + Math.ceil(wait / 1000) + 's') : (me.cells.length > 1 ? 'Merge ready' : '');
+      }
+
+      const ranked = players.filter(p => p.alive).sort((a, b) => totalMass(b) - totalMass(a)).slice(0, 8);
+      document.getElementById('lbList').innerHTML = ranked.map((p, i) =>
+        `<li class="${p.id === myId ? 'me' : ''}"><span>${i + 1}. ${escapeHtml(p.name)}</span><span>${Math.floor(totalMass(p))}</span></li>`
+      ).join('');
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function worldToScreen(x, y) {
+      return { x: (x - cam.x) * cam.z + W / 2, y: (y - cam.y) * cam.z + H / 2 };
+    }
+
+    function drawGrid() {
+      const step = 60;
+      const startX = cam.x - W / 2 / cam.z;
+      const startY = cam.y - H / 2 / cam.z;
+      const endX = cam.x + W / 2 / cam.z;
+      const endY = cam.y + H / 2 / cam.z;
+      ctx.strokeStyle = 'rgba(255,255,255,0.045)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (let x = Math.floor(startX / step) * step; x < endX; x += step) {
+        const s = worldToScreen(x, 0);
+        ctx.moveTo(s.x, 0); ctx.lineTo(s.x, H);
+      }
+      for (let y = Math.floor(startY / step) * step; y < endY; y += step) {
+        const s = worldToScreen(0, y);
+        ctx.moveTo(0, s.y); ctx.lineTo(W, s.y);
+      }
+      ctx.stroke();
+      // border
+      const a = worldToScreen(0, 0), b = worldToScreen(WORLD, WORLD);
+      ctx.strokeStyle = 'rgba(110,231,255,0.35)';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+    }
+
+    function drawCell(cell, color, name, isMe) {
+      const s = worldToScreen(cell.x, cell.y);
+      const r = cell.r * cam.z;
+      if (s.x < -r || s.y < -r || s.x > W + r || s.y > H + r) return;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+      ctx.lineWidth = Math.max(1.5, Math.min(6, r * 0.05));
+      ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+      ctx.stroke();
+      if (r > 14) {
+        ctx.fillStyle = 'rgba(8,12,24,0.72)';
+        ctx.font = `800 ${Math.max(11, Math.min(22, r * 0.38))}px Nunito, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(name, s.x, s.y);
+      }
+    }
+
+    function shade(hex, amt) {
+      const n = hex.replace('#','');
+      const num = parseInt(n, 16);
+      let r = (num >> 16) + amt, g = ((num >> 8) & 255) + amt, b = (num & 255) + amt;
+      r = clamp(r, 0, 255); g = clamp(g, 0, 255); b = clamp(b, 0, 255);
+      return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+    }
+
+    function drawVirus(v) {
+      const s = worldToScreen(v.x, v.y);
+      const r = v.r * cam.z;
+      if (s.x < -r || s.y < -r || s.x > W + r || s.y > H + r) return;
+      ctx.beginPath();
+      const spikes = v.spikes;
+      for (let i = 0; i < spikes; i++) {
+        const a = (i / spikes) * Math.PI * 2;
+        const rr = i % 2 === 0 ? r * 1.18 : r * 0.82;
+        const x = s.x + Math.cos(a) * rr;
+        const y = s.y + Math.sin(a) * rr;
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.fillStyle = '#7cff6a';
+      ctx.fill();
+      ctx.strokeStyle = '#1f7a28';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    function draw() {
+      ctx.fillStyle = '#0b1020';
+      ctx.fillRect(0, 0, W, H);
+      drawGrid();
+      for (const f of foods) {
+        const s = worldToScreen(f.x, f.y);
+        const r = f.r * cam.z;
+        if (s.x < -10 || s.y < -10 || s.x > W + 10 || s.y > H + 10) continue;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, Math.max(2.2, r), 0, Math.PI * 2);
+        ctx.fillStyle = f.color;
+        ctx.fill();
+      }
+      for (const v of viruses) drawVirus(v);
+      const all = [];
+      for (const p of players) {
+        if (!p.alive) continue;
+        for (const c of p.cells) all.push({ cell: c, p });
+      }
+      all.sort((a, b) => a.cell.mass - b.cell.mass);
+      for (const { cell, p } of all) drawCell(cell, p.color, p.name, p.id === myId);
+    }
+
+    function loop(t) {
+      const dt = Math.min(0.033, (t - last) / 1000);
+      last = t;
+      try {
+        if (running) update(dt);
+        draw();
+      } catch (err) {
+        console.warn(err);
+      }
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+
+    addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; }, { passive: true });
+
+    const joyWrap = document.getElementById('joyWrap');
+    const joyKnob = document.getElementById('joyKnob');
+
+    function joyCenter() {
+      const r = joyWrap.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    }
+    function applyStick(clientX, clientY) {
+      const c = joyCenter();
+      let dx = clientX - c.x;
+      let dy = clientY - c.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const capped = Math.min(len, JOY_RADIUS);
+      dx = dx / len * capped;
+      dy = dy / len * capped;
+      stick.kx = dx; stick.ky = dy;
+      face.x = dx / JOY_RADIUS;
+      face.y = dy / JOY_RADIUS;
+      const fl = Math.hypot(face.x, face.y);
+      if (fl > 1) { face.x /= fl; face.y /= fl; }
+      joyKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+    }
+    function resetStick() {
+      stick.active = false;
+      stick.id = null;
+      stick.kx = 0; stick.ky = 0;
+      joyKnob.style.transform = 'translate(0px, 0px)';
+    }
+
+    joyWrap.addEventListener('pointerdown', e => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      stick.active = true;
+      stick.id = e.pointerId;
+      joyWrap.setPointerCapture(e.pointerId);
+      applyStick(e.clientX, e.clientY);
+    }, { passive: false });
+    joyWrap.addEventListener('pointermove', e => {
+      if (!stick.active || e.pointerId !== stick.id) return;
+      e.preventDefault();
+      applyStick(e.clientX, e.clientY);
+    }, { passive: false });
+    function endStick(e) {
+      if (e.pointerId !== stick.id) return;
+      resetStick();
+    }
+    joyWrap.addEventListener('pointerup', endStick);
+    joyWrap.addEventListener('pointercancel', endStick);
+
+    let feeding = false;
+    function bindAction(el, fn, hold) {
+      const down = e => {
+        e.preventDefault();
+        e.stopPropagation();
+        el.classList.add('pressed');
+        try { el.setPointerCapture(e.pointerId); } catch (_) {}
+        const me = players.find(p => p.id === myId);
+        if (me && running && me.alive) fn(me);
+        if (hold) feeding = true;
+      };
+      const up = () => { el.classList.remove('pressed'); if (hold) feeding = false; };
+      el.addEventListener('pointerdown', down, { passive: false });
+      el.addEventListener('pointerup', up);
+      el.addEventListener('pointercancel', up);
+      el.addEventListener('click', e => e.preventDefault());
+    }
+    bindAction(document.getElementById('splitBtn'), splitPlayer, false);
+    bindAction(document.getElementById('feedBtn'), eject, true);
+
+    addEventListener('keydown', e => {
+      if (!running) return;
+      if (e.code === 'Space') { e.preventDefault(); const me = players.find(p => p.id === myId); if (me) splitPlayer(me); }
+      if (e.code === 'KeyW') { feeding = true; const me = players.find(p => p.id === myId); if (me) eject(me); }
+    });
+    addEventListener('keyup', e => { if (e.code === 'KeyW') feeding = false; });
+
+    document.addEventListener('touchmove', e => {
+      if (e.target.closest('#joyWrap, #actions, .act')) e.preventDefault();
+    }, { passive: false });
+
+    const lb = document.getElementById('leaderboard');
+    const lbToggle = document.getElementById('lbToggle');
+    let lbOpen = localStorage.getItem('blobarena_lb') !== 'off';
+    function setLb(open) {
+      lbOpen = open;
+      lb.classList.toggle('closed', !open);
+      lbToggle.textContent = open ? '▲' : '▼';
+      localStorage.setItem('blobarena_lb', open ? 'on' : 'off');
+    }
+    setLb(lbOpen);
+    lbToggle.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      e.stopPropagation();
+      setLb(!lbOpen);
+    }, { passive: false });
+
+    const saved = localStorage.getItem('blobarena_name') || '';
+    document.getElementById('nameInput').value = saved;
+    function start(e) {
+      if (e) { e.preventDefault(); e.stopPropagation(); }
+      const input = document.getElementById('nameInput');
+      try { input.blur(); } catch (_) {}
+      const name = (input.value || '').trim() || 'Player';
+      try { localStorage.setItem('blobarena_name', name); } catch (_) {}
+      resetWorld(name);
+    }
+    const playBtn = document.getElementById('playBtn');
+    playBtn.addEventListener('pointerdown', start, { passive: false });
+    playBtn.addEventListener('click', start);
+    document.getElementById('againBtn').addEventListener('pointerdown', start, { passive: false });
+    document.getElementById('againBtn').addEventListener('click', start);
+    document.getElementById('nameInput').addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === 'Go') start(e);
+    });
+  })();
+  </script>
+</body>
+</html>

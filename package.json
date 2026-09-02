@@ -2,6 +2,7 @@
   "name": "orbeats",
   "version": "1.0.0",
   "private": true,
+  "description": "OrbEats — server-authoritative agar-style room",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
